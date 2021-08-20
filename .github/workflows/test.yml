@@ -1,0 +1,12 @@
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: aviate-labs/setup-dfx@v0.2.2
+        with:
+          dfx-version: 0.7.2
+          install-moc: true
+      - run: for i in src/*.mo ; do moc --package base $(dfx cache show)/base --check $i ; done
+      - run: for i in test/*.mo ; do moc --package base $(dfx cache show)/base -r $i ; done
