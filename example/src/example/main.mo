@@ -1,7 +1,7 @@
 import Blob "mo:base/Blob";
 import Text "mo:base/Text";
 
-import AssetStorage "mo:asset-storage/AssetStorage"
+import AssetStorage "mo:asset-storage/AssetStorage";
 
 actor = {
     public shared query func http_request(

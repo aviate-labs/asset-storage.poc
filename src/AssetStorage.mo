@@ -1,7 +1,4 @@
-// Name  : asset-storage-0.7.0
-// Module: 2664385b7ad001123d8cea1f7147fad005d012116139787d9054b2f3a62718ec
-
-module {
+module AssetStorage {
   public type AssetDetails = {
     key : Key;
     encodings : [AssetEncodingDetails];
