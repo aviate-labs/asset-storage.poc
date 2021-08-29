@@ -2,6 +2,12 @@
 
 ## References
 
+### certified-assets
+
+A re-implementation of the DFX assets canister in Rust with support for asset certification.
+
+- [certified-assets](https://github.com/dfinity/certified-assets)
+
 ### icx-proxy
 
 A command line tool to serve as a gateway for a Internet Computer replica.
