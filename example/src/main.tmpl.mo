@@ -6,6 +6,7 @@ import Hash "mo:base/Hash";
 import HashMap "mo:base/HashMap";
 import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
+import Order "mo:base/Order";
 import Result "mo:base/Result";
 import SHA256 "mo:sha/SHA256";
 import Text "mo:base/Text";
@@ -17,11 +18,21 @@ import State "State";
 
 shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
 
+    private let BATCH_EXPIRY_NANOS = 300_000_000_000;
+
     var state = State.State();
     state.authorized := [owner];
 
     public shared({caller}) func authorize(p : Principal) : async () {
-        // TODO
+        switch (state.isAuthorized(caller)) {
+            case (#err(e)) throw Error.reject(e);
+            case (#ok()) {
+                for (a in state.authorized.vals()) {
+                    if (a == p) return;
+                };
+                state.authorized := Array.append(state.authorized, [p])
+            };
+        };
     };
 
     public shared({caller}) func clear(
@@ -44,13 +55,50 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
     public shared({caller}) func commit_batch(
         a : AssetStorage.CommitBatchArguments,
     ) : async () {
-        // TODO
+        switch (state.isAuthorized(caller)) {
+            case (#err(e)) throw Error.reject(e);
+            case (#ok()) {
+                let batch_id = a.batch_id;
+                for (operation in a.operations.vals()) {
+                    switch (operation) {
+                        case (#Clear(_)) _clear();
+                        case (#CreateAsset(a)) {
+                            switch (_create_asset(a)) {
+                                case (#err(e)) throw Error.reject(e);
+                                case (#ok()) {};
+                            };
+                        };
+                        case (#DeleteAsset(a)) _delete_asset(a);
+                        case (#SetAssetContent(a)) {
+                            switch (_set_asset_content(a)) {
+                                case (#err(e)) throw Error.reject(e);
+                                case (#ok()) {};
+                            };
+                        };
+                        case (#UnsetAssetContent(a)) {
+                            switch (_unset_asset_content(a)) {
+                                case (#err(e)) throw Error.reject(e);
+                                case (#ok()) {};
+                            };
+                        };
+                    };
+                };
+            };
+        };
     };
 
     public shared({caller}) func create_asset(
         a : AssetStorage.CreateAssetArguments,
     ) : async () {
-        // TODO
+        switch (state.isAuthorized(caller)) {
+            case (#err(e)) throw Error.reject(e);
+            case (#ok()) {
+                switch (_create_asset(a)) {
+                    case (#err(e)) throw Error.reject(e);
+                    case (#ok()) {};
+                };
+            };
+        };
     };
 
     private func _create_asset(
@@ -77,8 +125,28 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
     public shared({caller}) func create_batch({}) : async {
         batch_id : AssetStorage.BatchId
     } {
-        // TODO
-        {batch_id = 0 : AssetStorage.BatchId};
+        switch (state.isAuthorized(caller)) {
+            case (#err(e)) throw Error.reject(e);
+            case (#ok()) {
+                let batch_id = state.batchID();
+                let now = Time.now();
+                state.batches.put(batch_id, {
+                    expires_at = now + BATCH_EXPIRY_NANOS;
+                });
+
+                // Remove expired batches and chunks.
+                for ((k, b) in state.batches.entries()) {
+                    if (b.expires_at > now) state.batches.delete(k);
+                };
+                for ((k, c) in state.chunks.entries()) {
+                    switch (state.batches.get(c.batch_id)) {
+                        case (null)    { state.chunks.delete(k); };
+                        case (? batch) {};
+                    };
+                };
+                { batch_id; };
+            };
+        };
     };
 
     public shared({caller}) func create_chunk({
@@ -87,8 +155,25 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
     }) : async {
         chunk_id : AssetStorage.ChunkId
     } {
-        // TODO
-        {chunk_id = 0 : AssetStorage.ChunkId};
+        switch (state.isAuthorized(caller)) {
+            case (#err(e)) throw Error.reject(e);
+            case (#ok()) {
+                switch (state.batches.get(batch_id)) {
+                    case (null) throw Error.reject("batch not found: " # Nat.toText(batch_id));
+                    case (? batch) {
+                        state.batches.put(batch_id, {
+                            expires_at = Time.now() + BATCH_EXPIRY_NANOS;
+                        });
+                        let chunk_id   = state.chunkID();
+                        state.chunks.put(chunk_id, {
+                            batch_id;
+                            content;
+                        });
+                        { chunk_id; };
+                    };
+                };
+            };
+        };
     };
 
     // Delete an asset by key.
@@ -119,14 +204,26 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
         content_encoding : Text;
         total_length     : Nat;
     } {
-        // TODO
-        {
-            content          = [];
-            sha256           = null;
-            content_type     = "";
-            content_encoding = "";
-            total_length     = 0;
+        switch (state.assets.get(key)) {
+            case (null) throw Error.reject("asset not found: " # key);
+            case (? asset) {
+                for (e in accept_encodings.vals()) {
+                    switch (asset.encodings.get(e)) {
+                        case (null) {};
+                        case (? encoding) {
+                            return {
+                                content          = encoding.content_chunks[0];
+                                sha256           = ?encoding.sha256;
+                                content_type     = asset.content_type;
+                                content_encoding = e;
+                                total_length     = encoding.total_length;
+                            };
+                        };
+                    }
+                };
+            };
         };
+        throw Error.reject("no matching encoding found: " # debug_show(accept_encodings));
     };
 
     public shared query({caller}) func get_chunk({
@@ -254,19 +351,63 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
     };
 
     public shared query({caller}) func list({}) : async [AssetStorage.AssetDetails] {
-        // TODO
-        [];
+        var details : [AssetStorage.AssetDetails] = [];
+        for ((key, a) in state.assets.entries()) {
+            var encodings : [AssetStorage.AssetEncodingDetails] = [];
+            for ((n, e) in a.encodings.entries()) {
+                encodings := Array.append<AssetStorage.AssetEncodingDetails>(encodings, [{
+                    content_encoding = n;
+                    sha256           = ?e.sha256;
+                    length           = e.total_length;
+                    modified         = e.modified;
+                }]);
+            };
+            encodings := Array.sort(encodings, func(
+                a : AssetStorage.AssetEncodingDetails, 
+                b : AssetStorage.AssetEncodingDetails,
+            ) : Order.Order {
+                Text.compare(a.content_encoding, b.content_encoding);
+            });
+            details := Array.append(details, [{
+                key;
+                content_type = a.content_type;
+                encodings;
+            }])
+        };
+        details;
     };
 
-    public shared query({caller}) func retrieve(p : AssetStorage.Path) : async AssetStorage.Contents {
-        // TODO
-        [];
+    public shared query({caller}) func retrieve(
+        p : AssetStorage.Path,
+    ) : async AssetStorage.Contents {
+        switch (state.assets.get(p)) {
+            case (null) throw Error.reject("asset not found: " # p);
+            case (? asset) {
+                switch (asset.encodings.get("identity")) {
+                    case (null) throw Error.reject("no identity encoding");
+                    case (? encoding) {
+                        if (encoding.content_chunks.size() > 1) {
+                            throw Error.reject("asset too large. use get() or get_chunk() instead");
+                        };
+                        encoding.content_chunks[0];
+                    };
+                };
+            };
+        };
     };
 
     public shared({caller}) func set_asset_content(
         a : AssetStorage.SetAssetContentArguments,
     ) : async () {
-        // TODO
+        switch (state.isAuthorized(caller)) {
+            case (#err(e)) throw Error.reject(e);
+            case (#ok()) {
+                switch (_set_asset_content(a)) {
+                    case (#err(e)) throw Error.reject(e);
+                    case (#ok()) {};
+                };
+            };
+        };
     };
 
     private func _set_asset_content(
@@ -276,7 +417,6 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
         switch (state.assets.get(a.key)) {
             case (null) #err("asset not found: " # a.key);
             case (? asset) {
-                let now = Time.now();
                 var content_chunks : [[Nat8]] = [];
                 for (chunkID in a.chunk_ids.vals()) {
                     switch (state.chunks.get(chunkID)) {
@@ -305,7 +445,7 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
 
                 let encodings = asset.encodings;
                 encodings.put(a.content_encoding, {
-                    modified = now;
+                    modified  = Time.now();
                     content_chunks;
                     certified = false;
                     total_length;
@@ -320,14 +460,39 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
         };
     };
 
-    public shared({caller}) func store(asset : {
+    public shared({caller}) func store(a : {
         key              : AssetStorage.Key;
         content          : [Nat8];
         sha256           : ?[Nat8];
         content_type     : Text;
         content_encoding : Text;
     }) : async () {
-        // TODO
+        switch (state.isAuthorized(caller)) {
+            case (#err(e)) throw Error.reject(e);
+            case (#ok()) {
+                let encodings = HashMap.HashMap<Text, State.AssetEncoding>(
+                    0, Text.equal, Text.hash,
+                );
+                let hash = SHA256.sum256(a.content);
+                switch (a.sha256) {
+                    case (null) {};
+                    case (? sha256) {
+                        if (hash != sha256) throw Error.reject("SHA-256 mismatch");
+                    };
+                };
+                encodings.put(a.content_encoding, {
+                    certified      = false;
+                    content_chunks = [a.content];
+                    modified       = Time.now();
+                    sha256         = hash;
+                    total_length   = a.content.size();
+                });
+                state.assets.put(a.key, {
+                    content_type = a.content_type;
+                    encodings;
+                })
+            };
+        };
     };
 
     public shared({caller}) func unset_asset_content(

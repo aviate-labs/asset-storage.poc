@@ -39,7 +39,7 @@ module {
 
         var nextChunkID : AssetStorage.ChunkId = 1;
 
-        public func chunkId() : AssetStorage.ChunkId {
+        public func chunkID() : AssetStorage.ChunkId {
             let cID = nextChunkID;
             nextChunkID += 1;
             cID;
