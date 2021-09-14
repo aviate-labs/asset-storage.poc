@@ -5,6 +5,10 @@
         "example": {
             "type": "motoko",
             "main": "src/example/main.mo"
+        },
+        "full-example": {
+            "type": "motoko",
+            "main": "src/main.mo"
         }
     },
     "defaults": {
