@@ -1,4 +1,4 @@
 {
-  dependencies = [ "base", "asset-storage" ],
+  dependencies = [ "base", "asset-storage", "sha" ],
   compiler = None Text
 }

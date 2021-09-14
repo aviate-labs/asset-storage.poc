@@ -6,7 +6,17 @@ let additions = [
    , repo = "https://github.com/aviate-labs/asset-storage.mo"
    , version = "asset-storage-0.7.0"
    , dependencies = [ "base" ]
-   }
+   },
+   { name = "sha"
+   , repo = "https://github.com/aviate-labs/sha.mo"
+   , version = "v0.1.1"
+   , dependencies = [ "base", "encoding" ]
+   },
+   { name = "encoding"
+  , repo = "https://github.com/aviate-labs/encoding.mo"
+  , version = "v0.2.1"
+  , dependencies = ["base"]
+  }
 ] : List Package
 
 let overrides = [] : List Package
