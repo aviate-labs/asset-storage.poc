@@ -1,5 +1,7 @@
 # Asset Storage Interface
 
+You can find an example implementation in [example/src](./example/src).
+
 ## References
 
 ### certified-assets
