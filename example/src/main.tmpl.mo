@@ -20,7 +20,27 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
 
     private let BATCH_EXPIRY_NANOS = 300_000_000_000;
 
-    var state = State.State();
+    var stableAuthorized : [Principal]                             = [owner];
+    var stableAssets     : [(AssetStorage.Key, State.StableAsset)] = [];
+
+    system func preupgrade() {
+        stableAuthorized := state.authorized;
+        for ((k, a) in state.assets.entries()) {
+            stableAssets := Array.append<(AssetStorage.Key, State.StableAsset)>(stableAssets, [(
+                k, {
+                   content_type = a.content_type;
+                   encodings    = Iter.toArray(a.encodings.entries());
+                },
+            )]);
+        };
+    };
+
+    system func postupgrade() {
+        stableAuthorized := [];
+        stableAssets     := [];
+    };
+
+    var state = State.State(stableAuthorized, stableAssets);
     state.authorized := [owner];
 
     public shared({caller}) func authorize(p : Principal) : async () {
@@ -47,9 +67,7 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
     };
 
     private func _clear() {
-        let authorized = state.authorized;
-        state := State.State();
-        state.authorized := authorized;
+        state := State.State(state.authorized, []);
     };
 
     public shared({caller}) func commit_batch(

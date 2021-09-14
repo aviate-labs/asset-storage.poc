@@ -8,7 +8,12 @@ import Text "mo:base/Text";
 module {
     public type Asset = {
         content_type : Text;
-        encodings: HashMap.HashMap<Text, AssetEncoding>;
+        encodings    : HashMap.HashMap<Text, AssetEncoding>;
+    };
+
+    public type StableAsset = {
+        content_type : Text;
+        encodings    : [(Text, AssetEncoding)];
     };
 
     public type AssetEncoding = {
@@ -28,10 +33,25 @@ module {
         expires_at : Int;
     };
 
-    public class State() {
+    public class State(
+        stableAuthorized : [Principal],
+        stableAssets     : [(AssetStorage.Key, StableAsset)],
+    ) {
         public let assets = HashMap.HashMap<AssetStorage.Key, Asset>(
             0, Text.equal, Text.hash,
         );
+        for ((k, v) in stableAssets.vals()) {
+            let encodings = HashMap.HashMap<Text, AssetEncoding>(
+                0, Text.equal, Text.hash,
+            );
+            for ((k, e) in v.encodings.vals()) {
+                encodings.put(k, e)
+            };
+            assets.put(k, {
+                content_type = v.content_type;
+                encodings;
+            });
+        };
 
         public let chunks = HashMap.HashMap<AssetStorage.ChunkId, Chunk>(
             0, Nat.equal, Hash.hash,
@@ -57,7 +77,7 @@ module {
             bID;
         };
 
-        public var authorized : [Principal] = [];
+        public var authorized : [Principal] = stableAuthorized;
 
         public func isAuthorized(p : Principal) : Result.Result<(), Text> {
             for (a in authorized.vals()) {
