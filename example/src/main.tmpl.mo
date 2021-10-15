@@ -154,7 +154,7 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
 
                 // Remove expired batches and chunks.
                 for ((k, b) in state.batches.entries()) {
-                    if (b.expires_at > now) state.batches.delete(k);
+                    if (now > b.expires_at) state.batches.delete(k);
                 };
                 for ((k, c) in state.chunks.entries()) {
                     switch (state.batches.get(c.batch_id)) {
