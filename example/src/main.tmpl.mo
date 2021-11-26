@@ -1,4 +1,5 @@
 import Array "mo:base/Array";
+import Buffer "mo:base/Buffer";
 import AssetStorage "mo:asset-storage/AssetStorage";
 import Blob "mo:base/Blob";
 import Error "mo:base/Error";
@@ -258,11 +259,11 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
     public shared query({caller}) func http_request(
         r : AssetStorage.HttpRequest,
     ) : async AssetStorage.HttpResponse {
-        var encodings : [Text] = [];
+        let encodings = Buffer.Buffer<Text>(r.headers.size());
         for ((k, v) in r.headers.vals()) {
             if (textToLower(k) == "accept-encoding") {
                 for (v in Text.split(v, #text(","))) {
-                    encodings := Array.append(encodings, [v]);
+                    encodings.add(v);
                 };
             };
         };
@@ -369,30 +370,30 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
     };
 
     public shared query({caller}) func list({}) : async [AssetStorage.AssetDetails] {
-        var details : [AssetStorage.AssetDetails] = [];
+        let details = Buffer.Buffer<AssetStorage.AssetDetails>(state.assets.size());
         for ((key, a) in state.assets.entries()) {
-            var encodings : [AssetStorage.AssetEncodingDetails] = [];
+            let encodingsBuffer = Buffer.Buffer<AssetStorage.AssetEncodingDetails>(a.encodings.size());
             for ((n, e) in a.encodings.entries()) {
-                encodings := Array.append<AssetStorage.AssetEncodingDetails>(encodings, [{
+                encodingsBuffer.add({
                     content_encoding = n;
                     sha256           = ?e.sha256;
                     length           = e.total_length;
                     modified         = e.modified;
-                }]);
+                });
             };
-            encodings := Array.sort(encodings, func(
+            let encodings = Array.sort(encodingsBuffer.toArray(), func(
                 a : AssetStorage.AssetEncodingDetails, 
                 b : AssetStorage.AssetEncodingDetails,
             ) : Order.Order {
                 Text.compare(a.content_encoding, b.content_encoding);
             });
-            details := Array.append(details, [{
+            details.add({
                 key;
                 content_type = a.content_type;
                 encodings;
-            }])
+            });
         };
-        details;
+        details.toArray();
     };
 
     public shared query({caller}) func retrieve(
@@ -435,12 +436,12 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
         switch (state.assets.get(a.key)) {
             case (null) #err("asset not found: " # a.key);
             case (? asset) {
-                var content_chunks : [[Nat8]] = [];
+                let content_chunks = Buffer.Buffer<[Nat8]>(a.chunk_ids.size());
                 for (chunkID in a.chunk_ids.vals()) {
                     switch (state.chunks.get(chunkID)) {
                         case (null) return #err("chunk not found: " # Nat.toText(chunkID));
                         case (? chunk) {
-                            content_chunks := Array.append<[Nat8]>(content_chunks, [chunk.content]);
+                            content_chunks.add(chunk.content);
                         };
                     };
                 };
@@ -463,9 +464,9 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
 
                 let encodings = asset.encodings;
                 encodings.put(a.content_encoding, {
-                    modified  = Time.now();
-                    content_chunks;
-                    certified = false;
+                    modified       = Time.now();
+                    content_chunks = content_chunks.toArray();
+                    certified      = false;
                     total_length;
                     sha256;
                 });

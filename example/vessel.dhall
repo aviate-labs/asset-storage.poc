@@ -1,4 +1,4 @@
 {
   dependencies = [ "base", "asset-storage", "sha" ],
-  compiler = None Text
+  compiler = Some "0.6.11"
 }
