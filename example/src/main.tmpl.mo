@@ -21,8 +21,8 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
 
     private let BATCH_EXPIRY_NANOS = 300_000_000_000;
 
-    var stableAuthorized : [Principal]                             = [owner];
-    var stableAssets     : [(AssetStorage.Key, State.StableAsset)] = [];
+    stable var stableAuthorized : [Principal]                             = [owner];
+    stable var stableAssets     : [(AssetStorage.Key, State.StableAsset)] = [];
 
     system func preupgrade() {
         stableAuthorized := state.authorized;
