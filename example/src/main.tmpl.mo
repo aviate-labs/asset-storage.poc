@@ -26,14 +26,25 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
 
     system func preupgrade() {
         stableAuthorized := state.authorized;
+        let size = state.assets.size();
+        let assets = Array.init<(AssetStorage.Key, State.StableAsset)>(size, (
+            "", {
+                content_type = "";
+                encodings    = [];
+            },
+        ));
+
+        var i = 0;
         for ((k, a) in state.assets.entries()) {
-            stableAssets := Array.append<(AssetStorage.Key, State.StableAsset)>(stableAssets, [(
+            assets[i] := (
                 k, {
                    content_type = a.content_type;
                    encodings    = Iter.toArray(a.encodings.entries());
                 },
-            )]);
+            );
+            i += 1;
         };
+        stableAssets := Array.freeze(assets);
     };
 
     system func postupgrade() {
