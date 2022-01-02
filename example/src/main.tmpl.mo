@@ -278,6 +278,9 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
                 };
             };
         };
+        
+        encodings.add("identity");
+        
         // TODO: url decode + remove path.
         switch (state.assets.get(r.url)) {
             case (null) {};
