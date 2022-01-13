@@ -61,7 +61,7 @@ module AssetStorage {
     public type StreamingStrategy = {
         #Callback : {
             token : StreamingCallbackToken;
-            callback : shared query StreamingCallbackToken -> async StreamingCallbackHttpResponse;
+            callback : shared () -> async ();
         };
     };
     public type Time = Int;
