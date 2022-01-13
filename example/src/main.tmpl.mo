@@ -8,6 +8,7 @@ import HashMap "mo:base/HashMap";
 import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Order "mo:base/Order";
+import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import SHA256 "mo:sha/SHA256";
 import Text "mo:base/Text";
@@ -17,7 +18,7 @@ import Prim "mo:⛔"; // toLower...
 
 import State "State";
 
-shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
+shared({caller = owner}) actor class Assets() : async AssetStorage.Self = this {
 
     private let BATCH_EXPIRY_NANOS = 300_000_000_000;
 
@@ -320,13 +321,16 @@ shared({caller = owner}) actor class Assets() : async AssetStorage.Self = {
         asset         : State.Asset,
         encoding_name : Text,
         encoding      : State.AssetEncoding,
-    ) : ?AssetStorage.StreamingStrategy {
+    ) : ?AssetStorage.StreamingStrategy 
+        let self: Principal = Principal.fromActor(this);
+        let canisterId: Text = Principal.toText(self);
+        let canister = actor (canisterId) : actor { http_request_streaming_callback : shared () -> async () };
         switch (_create_token(key, index, asset, encoding_name, encoding)) {
             case (null) { null };
             case (? token) {
                 ?#Callback({
                     token;
-                    callback = http_request_streaming_callback;
+                    callback = canister.http_request_streaming_callback;
                 });
             };
         };
